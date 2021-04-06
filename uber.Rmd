@@ -1,0 +1,122 @@
+---
+title: "Explore NYC Uber Trips"
+output: pdf_document
+---
+# Explore NYC Uber Trips
+```{r, include=FALSE}
+library(ggplot2)
+library(lubridate)
+library(dplyr)
+library(tidyr)
+library(DT)
+library(scales)
+library(forcats)
+```
+
+## Introduction
+
+FiveThirtyEight obtained NYC Taxi & Limousine Commission (TLC) for use in a series of articles: Uber Is Serving New York’s Outer Boroughs More Than Taxis Are, Public Transit Should Be Uber’s New Best Friend, Uber Is Taking Millions Of Manhattan Rides Away From Taxis, Is Uber Making NYC Rush-Hour Traffic Worse? I used the 2014 Uber pickup data from April to September to analyze the customer behaviours in NYC.
+
+I created new variables date, day, month, year and day of the week to facilitate the data exploration part.
+
+```{r, include=FALSE}
+apr <- read.csv("uber-raw-data-apr14.csv")
+may <- read.csv("uber-raw-data-may14.csv")
+jun <- read.csv("uber-raw-data-jun14.csv")
+jul <- read.csv("uber-raw-data-jul14.csv")
+aug <- read.csv("uber-raw-data-aug14.csv")
+sep <- read.csv("uber-raw-data-sep14.csv")
+```
+
+```{r, include=FALSE}
+data_2014 <- rbind(apr, may, jun, jul, aug, sep)
+data_2014$Date.Time <- as.POSIXct(data_2014$Date.Time, format = "%m/%d/%Y %H:%M:%S")
+data_2014$Time <- format(as.POSIXct(data_2014$Date.Time, format = "%m/%d/%Y %H:%M:%S"), format="%H:%M:%S")
+```
+
+```{r, include=FALSE}
+data_2014$Date.Time <- ymd_hms(data_2014$Date.Time)
+data_2014$date <- factor(date(data_2014$Date.Time))
+data_2014$day <- factor(day(data_2014$Date.Time))
+data_2014$month <- factor(month(data_2014$Date.Time, label = TRUE))
+data_2014$year <- factor(year(data_2014$Date.Time))
+data_2014$dayofweek <- factor(weekdays(data_2014$Date.Time))
+
+```
+
+## Trips by Weekday
+
+
+```{r, include=FALSE}
+weekday <- data_2014 %>%
+  count(month, dayofweek) %>%
+  mutate(dayofweek = fct_relevel(dayofweek, "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")) 
+```
+
+```{r, echo=FALSE}
+weekday %>%
+  ggplot(aes(x = dayofweek, y = n, fill = month)) +
+  geom_bar(stat = "identity") +
+  scale_y_continuous(labels = comma) +
+  theme_minimal() + 
+  labs(title = "Trips by Weekday and Month",
+       subtitle = "Apr-Sep 2014",
+       x = "Weekday",
+       y = "Number of Trips") 
+```
+
+I used the ggplot function to plot the number of trips that the passengers had made in a week In the resulting visualizations, I could understand how the number of passengers fares throughout the week. The distribution of trips was unimodal, with the peak at Thursdays and Fridays. I observed that the number of trips are highest on Fridays. This implies that people tend to use Uber service more on weekend. On Sundays, due to many religious routines, many people tend to stay at home more, which could explain why the number of trips is lowest on Sundays.
+
+## Trips by Hour in a Day
+
+```{r, include=FALSE}
+hour <- data_2014 %>%
+  mutate(hour = factor(hour(data_2014$Date.Time))) %>%
+  count(month, hour) 
+```
+
+```{r, echo=FALSE}
+hour %>%
+  ggplot(aes(x = hour, y = n, fill = month)) +
+  geom_bar(stat = "identity") +
+  scale_y_continuous(labels = comma) +
+  theme_minimal() + 
+  labs(title = "Trips by Hour and Month",
+       subtitle = "Apr-Sep 2014",
+       x = "Hour",
+       y = "Number of Trips") 
+```
+
+I also used the ggplot function to plot the number of trips that the passengers had made in a day. In the resulting visualizations, I could understand how the number of passengers fares throughout the day. The distribution of trips was bimodal, with one peak at around 7:00 AM and another peak at around 5:00 PM, which corresponded to the commute hours. I observed that the number of trips are highest in the evening from 4:00 to 6:00 PM. This indicates that the number of trips was associated with the commute hours and people tended to take Uber for work, especially when they got back from work tiredly on a day.
+
+## Linear Model to Estimate the number of trips
+
+We wanted to estimate the number of trips by date, so I fitted a linear model to do so. The explanatory variable was the date and the response variable was the number of trips. The null hypothesis was that there was no difference in the number of trips in terms of the date (i.e. $$\beta_1 = 0$$).
+
+```{r, include=FALSE}
+date_pickups <- data_2014 %>%
+  group_by(date) %>%
+  summarise(num_pickups = n(), .groups = "drop")
+date_pickups$date<- as.Date(date_pickups$date)
+```
+
+```{r, echo=FALSE}
+date_lm <- lm(num_pickups ~ date, data = date_pickups)
+summary(date_lm)
+```
+
+After we fitted a linear model, the p-value was less than the significance level 0.05. Thus, we can conclude that we should reject the null hypothesis that there was no difference in the number of trips in terms of the date.
+
+```{r, echo=FALSE}
+ggplot(date_pickups,aes(x=date,y=num_pickups)) + 
+  geom_point(color="royalblue4") + 
+  geom_smooth(method=lm, fill='yellowgreen',color='yellow1',se=FALSE,size=1, formula = y~x) +
+  theme_minimal() + 
+  labs(title = "Number of Trips vs. Date",
+       subtitle = "Apr-Sep 2014",
+       x = "Date",
+       y = "Number of Trips")
+
+```
+
+Furthermore, let's look at the visualization. From the plot, we could see that within this time period, we noticed an increasing trend in the number of pickups as days passed by. However, from day to day there was fluctuation in the number of pickups. One possible reason was that there was a growth in Uber's businesses during this time period. Another one was that this increasing trend was seasonal so that Summer and Fall might have a larger number of trips. However, since we only had the data for 2014, we were not able to conclude whether it was a seasonal trend or it was by chance.
