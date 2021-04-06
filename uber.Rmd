@@ -2,7 +2,6 @@
 title: "Explore NYC Uber Trips"
 output: pdf_document
 ---
-# Explore NYC Uber Trips
 ```{r, include=FALSE}
 library(ggplot2)
 library(lubridate)
